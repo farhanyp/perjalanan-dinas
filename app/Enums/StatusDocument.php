@@ -8,5 +8,5 @@ enum StatusDocument: string
     case PROCESSING = 'PROCESSING';
     case APPROVE = 'APPROVE';
     case DECLINE = 'DECLINE';
-    case FAILED = 'FAILED';
+    case ARCHIVED = 'ARCHIVED';
 }
