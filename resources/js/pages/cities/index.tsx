@@ -2,28 +2,13 @@ import AppLayout from '@/layouts/app-layout';
 import { Head, useForm } from '@inertiajs/react';
 import { BreadcrumbItem } from '@/types';
 import { Button } from '@/components/ui/button';
-import citiesRoutes from '@/routes/cities';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { useState } from 'react';
-import { Plus, Edit, Trash2, Building2 } from 'lucide-react';
-import { Checkbox } from '@/components/ui/checkbox';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
+import { Plus, Edit, Trash2, Building2, Upload } from 'lucide-react';
+import citiesRoutes from '@/routes/cities';
+
+// Modular Components
+import { CityModal } from './components/city-modal';
+import { CityBatchModal } from './components/city-batch-modal';
 
 interface Province {
     id: number;
@@ -54,61 +39,26 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function CityIndex({ cities, provinces }: Props) {
-    const [isEditing, setIsEditing] = useState(false);
     const [selectedCity, setSelectedCity] = useState<City | null>(null);
-    const [isOpen, setIsOpen] = useState(false);
+    const [isSingleModalOpen, setIsSingleModalOpen] = useState(false);
+    const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
 
-    const { data, setData, post, put, delete: destroy, processing, errors, reset } = useForm({
-        province_id: '',
-        name: '',
-        latitude: '',
-        longitude: '',
-        is_abroad: false,
-    });
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (isEditing && selectedCity) {
-            put(citiesRoutes.update.url({ id: selectedCity.id }), {
-                onSuccess: () => {
-                    setIsOpen(false);
-                    reset();
-                    setIsEditing(false);
-                },
-            });
-        } else {
-            post(citiesRoutes.store.url(), {
-                onSuccess: () => {
-                    setIsOpen(false);
-                    reset();
-                },
-            });
-        }
-    };
+    const { delete: destroy } = useForm();
 
     const handleEdit = (city: City) => {
         setSelectedCity(city);
-        setData({
-            province_id: city.province_id.toString(),
-            name: city.name,
-            latitude: city.latitude || '',
-            longitude: city.longitude || '',
-            is_abroad: city.is_abroad,
-        });
-        setIsEditing(true);
-        setIsOpen(true);
+        setIsSingleModalOpen(true);
     };
 
     const handleDelete = (id: number) => {
         if (confirm('Are you sure you want to delete this city?')) {
-            destroy(citiesRoutes.destroy.url({ id }));
+            destroy(citiesRoutes.destroy.url({ city: id }));
         }
     };
 
     const openCreateModal = () => {
-        reset();
-        setIsEditing(false);
-        setIsOpen(true);
+        setSelectedCity(null);
+        setIsSingleModalOpen(true);
     };
 
     return (
@@ -126,7 +76,15 @@ export default function CityIndex({ cities, provinces }: Props) {
                             A list of all cities associated with provinces and islands.
                         </p>
                     </div>
-                    <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
+                    <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none flex gap-2">
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsBatchModalOpen(true)}
+                            className="flex items-center gap-2"
+                        >
+                            <Upload className="w-4 h-4" />
+                            Batch Upload
+                        </Button>
                         <Button onClick={openCreateModal} className="flex items-center gap-2">
                             <Plus className="w-4 h-4" />
                             Add City
@@ -195,86 +153,18 @@ export default function CityIndex({ cities, provinces }: Props) {
                 </div>
             </div>
 
-            <Dialog open={isOpen} onOpenChange={setIsOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>{isEditing ? 'Edit City' : 'Add New City'}</DialogTitle>
-                        <DialogDescription>
-                            Enter the details for the city.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="province_id">Province</Label>
-                            <Select
-                                value={data.province_id}
-                                onValueChange={(value) => setData('province_id', value)}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select a province" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {provinces.map((province) => (
-                                        <SelectItem key={province.id} value={province.id.toString()}>
-                                            {province.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            {errors.province_id && <p className="text-xs text-destructive">{errors.province_id}</p>}
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="name">Name</Label>
-                            <Input
-                                id="name"
-                                value={data.name}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setData('name', e.target.value)}
-                                placeholder="City Name"
-                                required
-                            />
-                            {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="latitude">Latitude</Label>
-                                <Input
-                                    id="latitude"
-                                    value={data.latitude}
-                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setData('latitude', e.target.value)}
-                                    placeholder="-6.1751"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="longitude">Longitude</Label>
-                                <Input
-                                    id="longitude"
-                                    value={data.longitude}
-                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setData('longitude', e.target.value)}
-                                    placeholder="106.8272"
-                                />
-                            </div>
-                        </div>
-                        <div className="flex items-center space-x-2 pt-2">
-                            <Checkbox
-                                id="is_abroad_c"
-                                checked={data.is_abroad}
-                                onCheckedChange={(checked) => setData('is_abroad', !!checked)}
-                            />
-                            <Label htmlFor="is_abroad_c" className="text-sm font-medium leading-none">
-                                Is this city abroad?
-                            </Label>
-                        </div>
-                        <DialogFooter className="pt-4">
-                            <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
-                                Cancel
-                            </Button>
-                            <Button type="submit" disabled={processing}>
-                                {isEditing ? 'Update City' : 'Create City'}
-                            </Button>
-                        </DialogFooter>
-                    </form>
-                </DialogContent>
-            </Dialog>
+            {/* Modals */}
+            <CityModal
+                isOpen={isSingleModalOpen}
+                onClose={() => setIsSingleModalOpen(false)}
+                city={selectedCity}
+                provinces={provinces}
+            />
+
+            <CityBatchModal
+                isOpen={isBatchModalOpen}
+                onClose={() => setIsBatchModalOpen(false)}
+            />
         </>
     );
 }

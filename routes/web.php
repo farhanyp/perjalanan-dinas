@@ -24,6 +24,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::put('provinces/{province}', [\App\Http\Controllers\ProvinceController::class, 'update'])->name('provinces.update');
     Route::delete('provinces/{province}', [\App\Http\Controllers\ProvinceController::class, 'destroy'])->name('provinces.destroy');
 
+    Route::get('cities/download-template', [\App\Http\Controllers\CityController::class, 'downloadTemplate'])->name('cities.download-template');
+    Route::post('cities/import-batch', [\App\Http\Controllers\CityController::class, 'importBatch'])->name('cities.import-batch');
     Route::get('cities', [\App\Http\Controllers\CityController::class, 'index'])->name('cities.index');
     Route::post('cities', [\App\Http\Controllers\CityController::class, 'store'])->name('cities.store');
     Route::put('cities/{city}', [\App\Http\Controllers\CityController::class, 'update'])->name('cities.update');
