@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { BookOpen, FolderGit2, LayoutGrid } from 'lucide-react';
+import { BookOpen, FolderGit2, LayoutGrid, MapPin, Landmark, Building2, FileText } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -14,6 +14,10 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
+import islandsRoutes from '@/routes/islands';
+import provincesRoutes from '@/routes/provinces';
+import citiesRoutes from '@/routes/cities';
+import documentsRoutes from '@/routes/documents';
 import type { NavItem } from '@/types';
 
 const mainNavItems: NavItem[] = [
@@ -21,6 +25,26 @@ const mainNavItems: NavItem[] = [
         title: 'Dashboard',
         href: dashboard(),
         icon: LayoutGrid,
+    },
+    {
+        title: 'Islands',
+        href: islandsRoutes.index.url(),
+        icon: MapPin,
+    },
+    {
+        title: 'Provinces',
+        href: provincesRoutes.index.url(),
+        icon: Landmark,
+    },
+    {
+        title: 'Cities',
+        href: citiesRoutes.index.url(),
+        icon: Building2,
+    },
+    {
+        title: 'Documents',
+        href: documentsRoutes.index.url(),
+        icon: FileText,
     },
 ];
 
