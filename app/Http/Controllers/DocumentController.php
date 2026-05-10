@@ -14,8 +14,8 @@ class DocumentController extends Controller
     public function index(): Response
     {
         return Inertia::render('documents/index', [
-            'documents' => Document::with(['city', 'creator'])->latest()->get(),
-            'cities' => City::all(),
+            'documents' => Document::with(['city.province.island', 'creator'])->latest()->get(),
+            'cities' => City::with('province.island')->get(),
         ]);
     }
 

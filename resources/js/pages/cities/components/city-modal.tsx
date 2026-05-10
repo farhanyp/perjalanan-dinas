@@ -20,20 +20,7 @@ import {
 import { useForm } from '@inertiajs/react';
 import { useEffect } from 'react';
 import citiesRoutes from '@/routes/cities';
-
-interface Province {
-    id: number;
-    name: string;
-}
-
-interface City {
-    id: number;
-    province_id: number;
-    name: string;
-    latitude: string | null;
-    longitude: string | null;
-    is_abroad: boolean;
-}
+import { City, Province } from '@/types';
 
 interface Props {
     isOpen: boolean;
@@ -154,7 +141,7 @@ export function CityModal({ isOpen, onClose, city, provinces }: Props) {
                             onCheckedChange={(checked) => setData('is_abroad', !!checked)}
                         />
                         <Label htmlFor="is_abroad_modal" className="text-sm font-medium leading-none">
-                            Is this city abroad? (Indonesia = Yes)
+                            Apakah Kota ini berada di luar negri?
                         </Label>
                     </div>
                     <DialogFooter className="pt-4">

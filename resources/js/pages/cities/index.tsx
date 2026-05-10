@@ -1,6 +1,6 @@
 import AppLayout from '@/layouts/app-layout';
 import { Head, useForm } from '@inertiajs/react';
-import { BreadcrumbItem } from '@/types';
+import { City, Province, BreadcrumbItem } from '@/types';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { Plus, Edit, Trash2, Building2, Upload } from 'lucide-react';
@@ -9,22 +9,6 @@ import citiesRoutes from '@/routes/cities';
 // Modular Components
 import { CityModal } from './components/city-modal';
 import { CityBatchModal } from './components/city-batch-modal';
-
-interface Province {
-    id: number;
-    name: string;
-    island?: { name: string };
-}
-
-interface City {
-    id: number;
-    province_id: number;
-    name: string;
-    latitude: string | null;
-    longitude: string | null;
-    is_abroad: boolean;
-    province?: Province;
-}
 
 interface Props {
     cities: City[];

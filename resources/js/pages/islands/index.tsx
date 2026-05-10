@@ -1,6 +1,5 @@
 import AppLayout from '@/layouts/app-layout';
 import { Head, useForm } from '@inertiajs/react';
-import { BreadcrumbItem } from '@/types';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -9,7 +8,6 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-    DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,14 +15,7 @@ import { useState } from 'react';
 import { Plus, Edit, Trash2, MapPin } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import islandsRoutes from '@/routes/islands';
-
-interface Island {
-    id: number;
-    name: string;
-    latitude: string | null;
-    longitude: string | null;
-    is_abroad: boolean;
-}
+import { Island, BreadcrumbItem } from '@/types';
 
 interface Props {
     islands: Island[];

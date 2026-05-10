@@ -1,6 +1,5 @@
 import AppLayout from '@/layouts/app-layout';
 import { Head, useForm } from '@inertiajs/react';
-import { BreadcrumbItem } from '@/types';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -13,7 +12,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useState } from 'react';
-import { Plus, Edit, Trash2, FileText, Calendar, MapPin, User, CheckCircle2, Clock, XCircle, Archive, FileEdit } from 'lucide-react';
+import { Plus, Edit, Trash2, FileText, Calendar, MapPin, User as UserIcon, CheckCircle2, Clock, XCircle, Archive, FileEdit } from 'lucide-react';
 import {
     Select,
     SelectContent,
@@ -24,30 +23,8 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import documentsRoutes from '@/routes/documents';
-
-interface City {
-    id: number;
-    name: string;
-}
-
-interface User {
-    id: string;
-    name: string;
-}
-
-interface Document {
-    id: string;
-    city_id: number;
-    title: string;
-    description: string | null;
-    status: 'DRAFT' | 'PROCESSING' | 'APPROVE' | 'DECLINE' | 'ARCHIVED';
-    start_date: string;
-    end_date: string;
-    message_decline: string | null;
-    created_by: string;
-    city?: City;
-    creator?: User;
-}
+import { Island, Province, City, User, Document, BreadcrumbItem, StatusConfig } from '@/types';
+import { calculateDistance, formatIDR } from '@/lib/utils';
 
 interface Props {
     documents: Document[];
@@ -61,7 +38,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-const statusConfig = {
+const statusConfig: StatusConfig = {
     DRAFT: { color: 'bg-slate-100 text-slate-700 border-slate-200', icon: FileEdit },
     PROCESSING: { color: 'bg-blue-100 text-blue-700 border-blue-200', icon: Clock },
     APPROVE: { color: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
@@ -73,6 +50,9 @@ export default function DocumentIndex({ documents, cities }: Props) {
     const [isEditing, setIsEditing] = useState(false);
     const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
     const [isOpen, setIsOpen] = useState(false);
+    const [showSummary, setShowSummary] = useState(false);
+    const [allowanceDetail, setAllowanceDetail] = useState<any>(null);
+    const [isFetchingRate, setIsFetchingRate] = useState(false);
 
     const { data, setData, post, put, delete: destroy, processing, errors, reset } = useForm({
         city_id: '',
@@ -84,22 +64,117 @@ export default function DocumentIndex({ documents, cities }: Props) {
         message_decline: '',
     });
 
-    const handleSubmit = (e: React.FormEvent) => {
+
+    const handlePreSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        const destCity = cities.find(c => c.id.toString() === data.city_id);
+        if (!destCity) return;
+
+        // Calculate duration
+        const start = new Date(data.start_date);
+        const end = new Date(data.end_date);
+        const diffTime = Math.abs(end.getTime() - start.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+        let dailyAllowance = 0;
+        let currency = 'IDR';
+        let isAbroad = destCity.is_abroad;
+        let distance = 0;
+
+        // Assume Home Base is City ID 1 (Jakarta)
+        const homeCity = cities.find(c => c.id === 1) || cities[0];
+
+        if (isAbroad) {
+            dailyAllowance = 50;
+            currency = 'USD';
+        } else {
+            // Distance calculation
+            if (homeCity && homeCity.latitude && homeCity.longitude && destCity.latitude && destCity.longitude) {
+                distance = calculateDistance(
+                    parseFloat(homeCity.latitude), parseFloat(homeCity.longitude),
+                    parseFloat(destCity.latitude), parseFloat(destCity.longitude)
+                );
+            } else {
+                // Default if no coordinates: assume > 60km if different city
+                distance = homeCity?.id === destCity.id ? 0 : 61;
+            }
+
+            if (distance > 60) {
+                const homeProvinceId = homeCity?.province_id;
+                const destProvinceId = destCity.province_id;
+                const homeIslandId = homeCity?.province?.island_id;
+                const destIslandId = destCity.province?.island_id;
+
+                if (homeProvinceId === destProvinceId) {
+                    dailyAllowance = 200000;
+                } else if (homeIslandId === destIslandId) {
+                    dailyAllowance = 250000;
+                } else {
+                    dailyAllowance = 300000;
+                }
+            } else {
+                dailyAllowance = 0;
+            }
+        }
+
+        let currentRate = 1;
+
+        if (currency === 'USD') {
+            setIsFetchingRate(true);
+            try {
+                const response = await fetch('https://v6.exchangerate-api.com/v6/2acf1a2d9866a9316797d24e/latest/USD');
+                const result = await response.json();
+                currentRate = result.conversion_rates.IDR;
+            } catch (error) {
+                console.error("Failed to fetch exchange rate", error);
+                currentRate = 15000;
+            } finally {
+                setIsFetchingRate(false);
+            }
+        }
+
+        const totalAllowance = dailyAllowance * diffDays;
+        const totalAmountIdr = currency === 'USD' ? totalAllowance * currentRate : totalAllowance;
+
+        setAllowanceDetail({
+            durationDays: diffDays,
+            dailyAllowance,
+            totalAllowance,
+            currency,
+            totalAmountIdr,
+            isAbroad,
+            distanceKm: distance.toFixed(2),
+            cityName: destCity.name,
+            exchangeRate: currentRate
+        });
+
+        setShowSummary(true);
+    };
+
+    const confirmSubmit = () => {
+        const options = {
+            onSuccess: () => {
+                setIsOpen(false);
+                setShowSummary(false);
+                reset();
+                setIsEditing(false);
+            },
+        };
+
+        const transform = (data: any) => ({ ...data, status: 'PROCESSING' });
+
         if (isEditing && selectedDocument) {
             put(documentsRoutes.update.url({ id: selectedDocument.id }), {
-                onSuccess: () => {
-                    setIsOpen(false);
-                    reset();
-                    setIsEditing(false);
-                },
+                ...options,
+                // @ts-ignore
+                transform
             });
         } else {
             post(documentsRoutes.store.url(), {
-                onSuccess: () => {
-                    setIsOpen(false);
-                    reset();
-                },
+                ...options,
+                // @ts-ignore
+                transform
             });
         }
     };
@@ -191,7 +266,7 @@ export default function DocumentIndex({ documents, cities }: Props) {
                                             <span className="truncate">{doc.city?.name}</span>
                                         </div>
                                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                            <User className="w-3 h-3" />
+                                            <UserIcon className="w-3 h-3" />
                                             <span className="truncate">{doc.creator?.name}</span>
                                         </div>
                                         <div className="flex items-center gap-2 text-xs text-muted-foreground col-span-2">
@@ -220,10 +295,10 @@ export default function DocumentIndex({ documents, cities }: Props) {
                             Fill in the details for the travel document.
                         </DialogDescription>
                     </DialogHeader>
-                    <form onSubmit={handleSubmit} className="space-y-6 pt-4">
+                    <form onSubmit={handlePreSubmit} className="space-y-6 pt-4">
                         <div className="grid grid-cols-2 gap-6">
                             <div className="space-y-2 col-span-2">
-                                <Label htmlFor="title">Document Title</Label>
+                                <Label htmlFor="title">Trip Purpose</Label>
                                 <Input
                                     id="title"
                                     value={data.title}
@@ -234,7 +309,7 @@ export default function DocumentIndex({ documents, cities }: Props) {
                                 {errors.title && <p className="text-xs text-destructive">{errors.title}</p>}
                             </div>
 
-                            <div className="space-y-2">
+                            <div className="space-y-2 col-span-2">
                                 <Label htmlFor="city_id">Destination City</Label>
                                 <Select
                                     value={data.city_id}
@@ -246,7 +321,7 @@ export default function DocumentIndex({ documents, cities }: Props) {
                                     <SelectContent>
                                         {cities.map((city) => (
                                             <SelectItem key={city.id} value={city.id.toString()}>
-                                                {city.name}
+                                                {city.name} {city.is_abroad ? '(Luar Negeri)' : ''}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -255,25 +330,7 @@ export default function DocumentIndex({ documents, cities }: Props) {
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="status">Current Status</Label>
-                                <Select
-                                    value={data.status}
-                                    onValueChange={(value: any) => setData('status', value)}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select status" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {Object.keys(statusConfig).map((s) => (
-                                            <SelectItem key={s} value={s}>{s}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                {errors.status && <p className="text-xs text-destructive">{errors.status}</p>}
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="start_date">Start Date</Label>
+                                <Label htmlFor="start_date">Departure Date (DD-MM-YYYY)</Label>
                                 <Input
                                     id="start_date"
                                     type="date"
@@ -285,7 +342,7 @@ export default function DocumentIndex({ documents, cities }: Props) {
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="end_date">End Date</Label>
+                                <Label htmlFor="end_date">Return Date (DD-MM-YYYY)</Label>
                                 <Input
                                     id="end_date"
                                     type="date"
@@ -297,7 +354,7 @@ export default function DocumentIndex({ documents, cities }: Props) {
                             </div>
 
                             <div className="space-y-2 col-span-2">
-                                <Label htmlFor="description">Description</Label>
+                                <Label htmlFor="description">Additional Description</Label>
                                 <Textarea
                                     id="description"
                                     value={data.description}
@@ -306,30 +363,89 @@ export default function DocumentIndex({ documents, cities }: Props) {
                                     className="min-h-[100px]"
                                 />
                             </div>
-
-                            {data.status === 'DECLINE' && (
-                                <div className="space-y-2 col-span-2">
-                                    <Label htmlFor="message_decline">Reason for Decline</Label>
-                                    <Textarea
-                                        id="message_decline"
-                                        value={data.message_decline}
-                                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setData('message_decline', e.target.value)}
-                                        placeholder="Explain why the document was declined..."
-                                        className="border-rose-200 focus-visible:ring-rose-500"
-                                    />
-                                </div>
-                            )}
                         </div>
 
                         <DialogFooter className="gap-2 sm:gap-0">
                             <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
                                 Cancel
                             </Button>
-                            <Button type="submit" disabled={processing} className="min-w-[120px]">
-                                {isEditing ? 'Save Changes' : 'Create Document'}
+                            <Button type="submit" disabled={processing || isFetchingRate} className="min-w-[120px]">
+                                {isFetchingRate ? 'Fetching Rate...' : (isEditing ? 'Update & Preview' : 'Ajukan')}
                             </Button>
                         </DialogFooter>
                     </form>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={showSummary} onOpenChange={setShowSummary}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Rangkuman Perjalanan Dinas</DialogTitle>
+                        <DialogDescription>
+                            Berikut adalah rincian pengajuan perjalanan dinas Anda.
+                        </DialogDescription>
+                    </DialogHeader>
+                    
+                    {allowanceDetail && (
+                        <div className="space-y-4 py-4">
+                            <div className="bg-muted/50 p-4 rounded-lg space-y-3">
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-muted-foreground">Kota Tujuan:</span>
+                                    <span className="font-medium">{allowanceDetail.cityName}</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-muted-foreground">Durasi:</span>
+                                    <span className="font-medium">{allowanceDetail.durationDays} Hari</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-muted-foreground">Jarak Estimasi:</span>
+                                    <span className="font-medium">{allowanceDetail.distanceKm} km</span>
+                                </div>
+                                <hr className="border-muted" />
+                                <div className="flex justify-between items-center">
+                                    <span className="text-sm text-muted-foreground">Uang Saku Per Hari:</span>
+                                    <span className="font-semibold text-sm">
+                                        {allowanceDetail.currency} {allowanceDetail.dailyAllowance.toLocaleString()}
+                                    </span>
+                                </div>
+                                <hr className="border-muted/50" />
+                                <div className="flex justify-between items-center">
+                                    <span className="text-sm font-bold">Total Uang Saku:</span>
+                                    <div className="text-right">
+                                        <div className="font-bold text-primary text-xl">
+                                            {allowanceDetail.currency} {allowanceDetail.totalAllowance.toLocaleString()}
+                                        </div>
+                                        {allowanceDetail.currency === 'USD' && (
+                                            <div className="text-xs text-muted-foreground font-medium">
+                                                ≈ {formatIDR(allowanceDetail.totalAmountIdr)}
+                                                <div className="text-[10px] opacity-70">
+                                                    (Rate: {allowanceDetail.exchangeRate.toLocaleString('id-ID', { maximumFractionDigits: 2 })})
+                                                </div>
+                                            </div>
+                                        )}
+                                        {allowanceDetail.currency === 'IDR' && allowanceDetail.durationDays > 1 && (
+                                            <div className="text-[10px] text-muted-foreground">
+                                                ({allowanceDetail.dailyAllowance.toLocaleString()} x {allowanceDetail.durationDays} hari)
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <p className="text-xs text-muted-foreground text-center italic bg-blue-50/50 py-2 rounded">
+                                * Status dokumen akan otomatis menjadi <span className="text-blue-600 font-bold">PROCESSING</span> setelah konfirmasi.
+                            </p>
+                        </div>
+                    )}
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowSummary(false)}>
+                            Revisi
+                        </Button>
+                        <Button onClick={confirmSubmit} disabled={processing}>
+                            Konfirmasi & Ajukan
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </>
